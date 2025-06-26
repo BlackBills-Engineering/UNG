@@ -9,7 +9,7 @@ from app.driver import driver
 
 import logging
 
-router = APIRouter(prefix="/pump", tags=["Pump operations"])
+router = APIRouter(prefix="/pump-old", tags=["Pump operations"])
 
 
 logger = logging.getLogger("mekser.api")
