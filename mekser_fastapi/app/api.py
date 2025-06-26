@@ -1,8 +1,14 @@
-from fastapi import APIRouter, Path, HTTPException, logger
+from fastapi import APIRouter, Path, HTTPException
 from .core import PumpService
 from .schemas import PumpStatusOut, PresetIn
 
+import logging
+
 router = APIRouter(prefix="/pump", tags=["Pump operations"])
+
+
+logger = logging.getLogger("mekser.api")
+
 
 def _not_found_if_empty(data: dict):
     if not data:
