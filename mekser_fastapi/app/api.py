@@ -5,7 +5,7 @@ from fastapi import APIRouter, Path, HTTPException
 from .core import PumpService
 from .schemas import PumpStatusOut, PresetIn
 
-from driver import driver
+from app.driver import driver
 
 import logging
 
