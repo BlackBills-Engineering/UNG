@@ -9,7 +9,7 @@ from typing import Dict, Any
 from .driver import driver
 from .enums import PumpStatus, DccCmd, DecimalConfig, DartTrans
 
-_log = logging.getLogger("mekser.core")
+logger = logging.getLogger("mekser.core")
 
 # ———— общие утилиты пакета ———— #
 def bcd_to_int(b: bytes) -> int:
@@ -31,6 +31,7 @@ class PumpService:
         Принимает полный кадр (STX..ETX), возвращает расшифрованные данные высокого уровня.
         Проверок CRC и адреса не делаем (уже на уровне драйвера).
         """
+        logger.debug(f"Parsing DC frame: {frame.hex()}")
         res: Dict[str, Any] = {}
         # body: байты между LENGTH и CRC
         if len(frame) < 8:
@@ -42,6 +43,7 @@ class PumpService:
             length = body[i+1]
             data   = body[i+2 : i+2+length]
             i     += 2 + length
+            logger.debug(f"Transaction {trans:#02x}, length={length}, data={data.hex()}")
             if trans == DartTrans.DC1:
                 status_code = data[0]
                 res["status"] = PumpStatus(status_code).name if status_code in PumpStatus.__members__.values() else status_code
@@ -55,17 +57,24 @@ class PumpService:
                 res["nozzle_out"] = bool((nozzle_info >> 4) & 0x01)
             elif trans == DartTrans.DC5:
                 res["alarm"] = data[0]
+                
+        logger.debug(f"Resulting dict: {res}")
         return res
 
     # ———— публичные методы ———— #
     @classmethod
     def return_status(cls, pump_id: int):
+        logger.info(f"return_status: pump_id={pump_id}")
         frame = driver.cd1(pump_id, DccCmd.RETURN_STATUS)
-        return cls._parse_dc_frame(frame)
+        logger.debug(f"Raw frame received: {frame.hex()}")
+        parsed = cls._parse_dc_frame(frame)
+        logger.info(f"Parsed status: {parsed}")
+        return parsed
 
     @classmethod
     def authorize(cls, pump_id: int, volume: float | None = None, amount: float | None = None):
         # (1) при необходимости – пресет
+        logger.info(f"authorize: pump_id={pump_id}, volume={volume}, amount={amount}")
         if volume is not None:
             v_int = int(volume * 10**DecimalConfig.VOLUME.value)
             driver.cd3_preset_volume(pump_id, int_to_bcd(v_int))
@@ -76,7 +85,10 @@ class PumpService:
             time.sleep(0.05)
         # (2) AUTHORIZE
         frame = driver.cd1(pump_id, DccCmd.AUTHORIZE)
-        return cls._parse_dc_frame(frame)
+        logger.debug(f"Raw frame after AUTHORIZE: {frame.hex()}")
+        parsed = cls._parse_dc_frame(frame)
+        logger.info(f"Parsed authorize response: {parsed}")
+        return parsed
 
     @classmethod
     def stop(cls, pump_id: int):

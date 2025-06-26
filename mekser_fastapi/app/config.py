@@ -2,6 +2,7 @@
 Небольшой конфиг-модуль.
 При необходимости параметры можно читать из переменных окружения.
 """
+import logging
 from pathlib import Path
 from typing import Final
 
@@ -21,3 +22,6 @@ DEFAULT_PUMP_IDS = [1]  # список ID колонок в системе
 CRC_POLY = 0x1021
 CRC_INIT = 0xFFFF
 
+
+logger = logging.getLogger("mekser.config")
+logger.debug(f"Configuring SERIAL_PORT={SERIAL_PORT}, BAUDRATE={BAUDRATE}, TIMEOUT={TIMEOUT}")

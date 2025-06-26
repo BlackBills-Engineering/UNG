@@ -49,7 +49,8 @@ class DartDriver:
         )
         self._lock = threading.Lock()
         self._seq  = 0x00              # чередуем 0x00 / 0x80
-        _log.info("Serial open on %s", SERIAL_PORT)
+        logger = logging.getLogger("mekser.driver")
+        logger.info(f"Opening serial port {SERIAL_PORT} @ {BAUDRATE}bps")
 
     # ——— общий API ——— #
     def transact(self, addr: int, trans_blocks: List[bytes], timeout: float = 1.0) -> bytes:
@@ -58,17 +59,26 @@ class DartDriver:
         ждёт ответ любого устройства с тем же адресом.
         Возвращает сырые байты кадра или b''.
         """
+        logger = logging.getLogger("mekser.driver.transact")
+        logger.debug(f"Requested transact(addr=0x{addr:02X}, blocks={len(trans_blocks)}, timeout={timeout})")
         frame = self._build_frame(addr, trans_blocks)
+        logger.debug(f"Built frame: {frame.hex()}")
+
         with self._lock:
+            logger.debug("Acquired serial lock, writing frame")
             self._ser.write(frame)
             self._ser.flush()
+            logger.debug("Frame written, entering read loop")
+
             start = time.time()
             buf = bytearray()
             while time.time() - start < timeout:
                 chunk = self._ser.read(self._ser.in_waiting or 1)
                 if chunk:
+                    logger.debug(f"Read chunk: {chunk.hex()}")
                     buf += chunk
                     if self.ETX in chunk:  # грубый маркер конца
+                        logger.debug("Detected ETX in chunk, breaking read")
                         break
             return bytes(buf)
 
@@ -78,6 +88,7 @@ class DartDriver:
         addr — байт адреса 0x50-0x6F,
         blocks — список готовых транзакций уровня 3 (каждая уже со своим [TRANS][LNG]…)
         """
+        logger = logging.getLogger("mekser.driver._build_frame")
         body = b"".join(blocks)
         lng = len(body)
         ctrl = 0xF0          # Host→Pump, data
@@ -87,6 +98,9 @@ class DartDriver:
         hdr_wo_crc = bytes([addr, ctrl, seq, lng]) + body
         crc = calc_crc(hdr_wo_crc)
         frame = bytes([self.STX]) + hdr_wo_crc + bytes([crc & 0xFF, crc >> 8, self.ETX])
+        logger.debug(f"Header without CRC: {hdr_wo_crc.hex()}")
+        logger.debug(f"CRC calculated: 0x{crc:04X}")
+        logger.debug(f"Final frame: {frame.hex()}")
         return frame
 
     # ——— helpers для CD-команд ——— #
