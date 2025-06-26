@@ -1,0 +1,23 @@
+"""
+Небольшой конфиг-модуль.
+При необходимости параметры можно читать из переменных окружения.
+"""
+from pathlib import Path
+from typing import Final
+
+# -------- Serial port ----------
+SERIAL_PORT: Final[str] = "/tmp/ttyV0"    
+BAUDRATE:   Final[int] = 9600
+BYTESIZE:   Final[int] = 8
+PARITY:     Final[str] = "N"
+STOPBITS:   Final[int] = 1
+TIMEOUT:    Final[float] = 0.5             # чтение 500 мс
+
+# -------- Pump addresses --------
+# Адрес = 0x50 + pump_id (1-based).
+DEFAULT_PUMP_IDS = [1]  # список ID колонок в системе
+
+# -------- Логика ----------------
+CRC_POLY = 0x1021
+CRC_INIT = 0xFFFF
+
