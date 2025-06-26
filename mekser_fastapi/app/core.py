@@ -26,40 +26,38 @@ def int_to_bcd(n: int, width: int = 4) -> bytes:
 class PumpService:
 
     @staticmethod
-    def _parse_dc_frame(frame: bytes) -> Dict[str, Any]:
+    def _parse_dc_frame(frame: bytes) -> dict:
         """
-        Принимает полный кадр (STX..ETX), возвращает расшифрованные данные высокого уровня.
-        Проверок CRC и адреса не делаем (уже на уровне драйвера).
+        Разбирает ответ насоса (DC-кадр) и возвращает словарь «status / volume / …».
+        Если пришёл только ACK/NAK (1–2 байта) — отдаёт {}.
         """
-        logger.debug(f"Parsing DC frame: {frame.hex()}")
-        res: Dict[str, Any] = {}
-        # body: байты между LENGTH и CRC
-        if len(frame) < 8:
-            return res
-        body = frame[5:-3]
-        i = 0
+        # короткий ACK / NAK → пропускаем
+        if len(frame) < 6:          # ADR CTRL SEQ LNG CRC_L CRC_H  → 6 байт минимум
+            return {}
+
+        # --- дальше идёт «старый» парсер ---
+        i = 4                       # позиция первого TRANS
+        body = frame[4:-3]          # ADR CTRL SEQ LNG [body] CRC_L CRC_H ETX SF
+        parsed: dict[str, object] = {}
+
         while i < len(body):
             trans = body[i]
-            length = body[i+1]
-            data   = body[i+2 : i+2+length]
-            i     += 2 + length
-            logger.debug(f"Transaction {trans:#02x}, length={length}, data={data.hex()}")
-            if trans == DartTrans.DC1:
-                status_code = data[0]
-                res["status"] = PumpStatus(status_code).name if status_code in PumpStatus.__members__.values() else status_code
-            elif trans == DartTrans.DC2:
-                res["volume"] = bcd_to_int(data[0:4]) / 10**DecimalConfig.VOLUME.value
-                res["amount"] = bcd_to_int(data[4:8]) / 10**DecimalConfig.AMOUNT.value
-            elif trans == DartTrans.DC3:
-                res["price"]      = bcd_to_int(data[0:3]) / 10**DecimalConfig.UNIT_PRICE.value
-                nozzle_info       = data[3]
-                res["nozzle"]     = nozzle_info & 0x0F
-                res["nozzle_out"] = bool((nozzle_info >> 4) & 0x01)
-            elif trans == DartTrans.DC5:
-                res["alarm"] = data[0]
-                
-        logger.debug(f"Resulting dict: {res}")
-        return res
+            length = body[i + 1]
+            payload = body[i + 2 : i + 2 + length]
+
+            if trans == 0x01:       # DC1 – STATUS
+                parsed["status"] = payload[1] & 0x0F
+            elif trans == 0x02:     # DC2 – Volume/Amount
+                vol  = int(payload[0:4].hex(), 16) / 100  # BCD → float
+                amo  = int(payload[4:8].hex(), 16) / 100
+                parsed.update(volume=vol, amount=amo)
+            elif trans == 0x03:     # DC3 – Nozzle info
+                parsed.update(nozzle=payload[0], nozzle_out=bool(payload[1] & 0x10))
+            # добавляйте другие DC* по необходимости
+
+            i += 2 + length
+
+        return parsed
 
     # ———— публичные методы ———— #
     @classmethod

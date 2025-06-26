@@ -46,19 +46,30 @@ class _PumpServiceExt(PumpService):
         driver.transact(0x50 + pump_id, [block])
         return cls.return_status(pump_id)
 
-    # --- CD5 Price Update ---------------------------------------------------
     @classmethod
     def update_price(cls, pump_id: int, price_map: dict[int, float]):
-        if any(not (1 <= n <= 16) for n in price_map):
+        """
+        price_map = { nozzle: price }
+        После ACK колонка переключается с NOT_PROGRAMMED → RESET,
+        но это занимает 200-400 мс, поэтому делаем несколько попыток опросить DC1.
+        """
+        if any(not (1 <= nz <= 16) for nz in price_map):
             raise ValueError("nozzle numbers must be 1…16")
 
         payload = bytearray()
-        for nz in range(1, 17):                       # всегда 16 позиций
+        for nz in range(1, 17):
             payload += _price_to_bcd(price_map.get(nz, 0.0))
 
         block = bytes([0x05, len(payload)]) + payload
-        driver.transact(0x50 + pump_id, [block])
-        return cls.return_status(pump_id)             # должен стать RESET
+        driver.transact(0x50 + pump_id, [block])          # колонка пришлёт ACK
+
+        import time
+        for _ in range(3):                                # макс 3 попытки
+            time.sleep(0.4)
+            status = cls.return_status(pump_id)
+            if status:                                    # DC1 получили
+                return status
+        return {}
 
     # --- CD14 Suspend -------------------------------------------------------
     @classmethod
