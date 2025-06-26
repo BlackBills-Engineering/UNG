@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Path, HTTPException
+from fastapi import APIRouter, Path, HTTPException, logger
 from .core import PumpService
 from .schemas import PumpStatusOut, PresetIn
 
@@ -11,7 +11,10 @@ def _not_found_if_empty(data: dict):
 
 @router.get("/{pump_id}/status", response_model=PumpStatusOut)
 def get_status(pump_id: int = Path(..., ge=1, description="Номер колонки (1-...)")):
-    return _not_found_if_empty(PumpService.return_status(pump_id))
+    logger.info(f"HTTP GET /pump/{pump_id}/status called")
+    data = PumpService.return_status(pump_id)
+    logger.info(f"GET status response: {data}")
+    return _not_found_if_empty(data)
 
 @router.get("/scan")
 def scan_pumps(max_id: int = 4):
@@ -30,17 +33,24 @@ def authorize(
     pump_id: int = Path(..., ge=1),
     preset: PresetIn | None = None,
 ):
+    logger.info(f"HTTP POST /pump/{pump_id}/authorize body={preset}")
     if preset and preset.volume and preset.amount:
         raise HTTPException(400, "Укажите либо volume, либо amount, но не оба")
-    return _not_found_if_empty(
-        PumpService.authorize(pump_id, volume=preset.volume if preset else None,
+    data = PumpService.authorize(pump_id, volume=preset.volume if preset else None,
                               amount=preset.amount if preset else None)
-    )
+    logger.info(f"POST authorize response: {data}")
+    return _not_found_if_empty(data)
 
 @router.post("/{pump_id}/stop", response_model=PumpStatusOut)
 def stop(pump_id: int = Path(..., ge=1)):
-    return _not_found_if_empty(PumpService.stop(pump_id))
+    logger.info(f"HTTP POST /pump/{pump_id}/stop called")
+    data = PumpService.stop(pump_id)
+    logger.info(f"POST stop response: {data}")
+    return _not_found_if_empty(data)
 
 @router.post("/{pump_id}/reset", response_model=PumpStatusOut)
 def reset(pump_id: int = Path(..., ge=1)):
-    return _not_found_if_empty(PumpService.reset(pump_id))
+    logger.info(f"HTTP POST /pump/{pump_id}/reset called")
+    data = PumpService.reset(pump_id)
+    logger.info(f"POST reset response: {data}")
+    return _not_found_if_empty(data)
