@@ -6,6 +6,7 @@
 import logging
 from fastapi import FastAPI
 from .api import router as pump_router
+from .api_extended import router as extended_router
 
 # настройка лога
 logging.basicConfig(
@@ -23,3 +24,4 @@ app = FastAPI(
 )
 
 app.include_router(pump_router)
+app.include_router(extended_router)
