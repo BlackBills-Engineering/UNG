@@ -1,26 +1,35 @@
 """
-driver.py – слой L1+L2 DART:
+driver.py – слой L1+L2 DART
 * собирает/разбирает кадры
-* крутит CRC-16/CCITT (0x1021)
-* чтение/запись через pyserial с thread-safe Lock
+* крутит CRC-16/CCITT (poly-0x1021, init-0x0000)
+* thread-safe работа с pyserial
 """
 
 from __future__ import annotations
 
-import threading, time, logging
-from typing import List, Tuple, Dict
+import threading
+import time
+import logging
+from typing import List
 
 import serial
 
 from .config import (
-    SERIAL_PORT, BAUDRATE, BYTESIZE, PARITY, STOPBITS, TIMEOUT,
-    CRC_INIT, CRC_POLY,
+    SERIAL_PORT,
+    BAUDRATE,
+    BYTESIZE,
+    PARITY,
+    STOPBITS,
+    TIMEOUT,
+    CRC_INIT,
+    CRC_POLY,
 )
 from .enums import DartTrans
 
 _log = logging.getLogger("mekser.driver")
 
-# ————————————————— CRC-16 ———————————————————— #
+
+# ───────────────────────────────── CRC-16 CCITT ────────────────────────────
 def calc_crc(data: bytes) -> int:
     crc = CRC_INIT
     for byte in data:
@@ -30,100 +39,98 @@ def calc_crc(data: bytes) -> int:
     return crc & 0xFFFF
 
 
-# ————————————————— Driver class —————————————— #
+# ───────────────────────────────── Driver ──────────────────────────────────
 class DartDriver:
     """
-    Потокобезопасный драйвер одной RS-485 линии.
+    Потокобезопасный драйвер одной RS-485 линии (MKR-5 DART-протокол).
     """
+
     STX = 0x02
     ETX = 0x03
+    SF  = 0xFA        # обязательный байт “Stop Frame” по спеке!
 
     def __init__(self):
         self._ser = serial.Serial(
-            port     = SERIAL_PORT,
-            baudrate = BAUDRATE,
-            bytesize = BYTESIZE,
-            parity   = PARITY,
-            stopbits = STOPBITS,
-            timeout  = TIMEOUT,
+            port=SERIAL_PORT,
+            baudrate=BAUDRATE,
+            bytesize=BYTESIZE,
+            parity=PARITY,
+            stopbits=STOPBITS,
+            timeout=TIMEOUT,
         )
         self._lock = threading.Lock()
-        self._seq  = 0x00              # чередуем 0x00 / 0x80
-        logger = logging.getLogger("mekser.driver")
-        logger.info(f"Opening serial port {SERIAL_PORT} @ {BAUDRATE}bps")
+        self._seq = 0x00                       # чередуем 0x00 / 0x80 для CTRL.seq
+        logging.getLogger("mekser.driver").info(
+            f"Opening serial port {SERIAL_PORT} @ {BAUDRATE} bps"
+        )
 
-    # ——— общий API ——— #
+    # ────────── публичный API ──────────
     def transact(self, addr: int, trans_blocks: List[bytes], timeout: float = 1.0) -> bytes:
         """
-        Отправляет один кадр с arbitrary набором транзакций,
-        ждёт ответ любого устройства с тем же адресом.
-        Возвращает сырые байты кадра или b''.
+        Отправить один кадр (STX … ETX SF) с произвольным списком транзакций
+        и дождаться ответа того же адреса. Возвращает «сырые» байты кадра.
         """
-        logger = logging.getLogger("mekser.driver.transact")
-        logger.debug(f"Requested transact(addr=0x{addr:02X}, blocks={len(trans_blocks)}, timeout={timeout})")
+        log = logging.getLogger("mekser.driver.transact")
+        log.debug(
+            f"transact(addr=0x{addr:02X}, blocks={len(trans_blocks)}, timeout={timeout})"
+        )
         frame = self._build_frame(addr, trans_blocks)
-        logger.debug(f"Built frame: {frame.hex()}")
+        log.debug(f"TX frame: {frame.hex()}")
 
         with self._lock:
-            logger.debug("Acquired serial lock, writing frame")
             self._ser.write(frame)
             self._ser.flush()
-            logger.debug("Frame written, entering read loop")
 
             start = time.time()
             buf = bytearray()
             while time.time() - start < timeout:
                 chunk = self._ser.read(self._ser.in_waiting or 1)
                 if chunk:
-                    logger.debug(f"Read chunk: {chunk.hex()}")
                     buf += chunk
-                    if self.ETX in chunk:  # грубый маркер конца
-                        logger.debug("Detected ETX in chunk, breaking read")
+                    if self.ETX in chunk:          # увидели ETX – почти конец
+                        # дочитываем SF (1 байт) если ещё нет
+                        if len(buf) < 2 or buf[-1] != self.SF:
+                            buf += self._ser.read(1)
                         break
+            log.debug(f"RX frame: {buf.hex()}")
             return bytes(buf)
 
-    # ——— утилиты ——— #
+    # ────────── приватка ──────────
     def _build_frame(self, addr: int, blocks: List[bytes]) -> bytes:
         """
-        addr — байт адреса 0x50-0x6F,
-        blocks — список готовых транзакций уровня 3 (каждая уже со своим [TRANS][LNG]…)
+        addr  – байт адреса 0x50…0x6F
+        blocks – список готовых транзакций L3 (каждая с [TRANS][LNG]…)
         """
-        logger = logging.getLogger("mekser.driver._build_frame")
         body = b"".join(blocks)
         lng = len(body)
-        ctrl = 0xF0          # Host→Pump, data
-        seq  = self._seq
-        self._seq = 0x80 if self._seq == 0x00 else 0x00
+        ctrl = 0xF0                      # 1111 0000 – Host, DATA
+        seq = self._seq
+        self._seq = 0x80 if self._seq == 0x00 else 0x00  # toggle 0x00/0x80
 
-        hdr_wo_crc = bytes([addr, ctrl, seq, lng]) + body
-        crc = calc_crc(hdr_wo_crc)
-        frame = bytes([self.STX]) + hdr_wo_crc + bytes([crc & 0xFF, crc >> 8, self.ETX])
-        logger.debug(f"Header without CRC: {hdr_wo_crc.hex()}")
-        logger.debug(f"CRC calculated: 0x{crc:04X}")
-        logger.debug(f"Final frame: {frame.hex()}")
+        hdr = bytes([addr, ctrl, seq, lng]) + body
+        crc = calc_crc(hdr)                              # CRC по ADR…Data
+        frame = (
+            bytes([self.STX])
+            + hdr
+            + bytes([crc & 0xFF, crc >> 8])              # CRC-L, CRC-H
+            + bytes([self.ETX, self.SF])                 # ETX, SF (0xFA)
+        )
         return frame
 
-    # ——— helpers для CD-команд ——— #
+    # ────────── helpers для частых команд (CD1/3/4) ──────────
     def cd1(self, pump_id: int, dcc: int) -> bytes:
         """CD1 = [0x01, 0x01, DCC]"""
-        addr_byte = 0x50 + pump_id
-        return self.transact(
-            addr_byte,
-            [bytes([DartTrans.CD1, 0x01, dcc])]
-        )
+        return self.transact(0x50 + pump_id, [bytes([DartTrans.CD1, 0x01, dcc])])
 
     def cd3_preset_volume(self, pump_id: int, value_bcd: bytes) -> bytes:
-        addr_byte = 0x50 + pump_id
         return self.transact(
-            addr_byte,
-            [bytes([DartTrans.CD3, 0x04]) + value_bcd]
+            0x50 + pump_id, [bytes([DartTrans.CD3, 0x04]) + value_bcd]
         )
 
     def cd4_preset_amount(self, pump_id: int, value_bcd: bytes) -> bytes:
-        addr_byte = 0x50 + pump_id
         return self.transact(
-            addr_byte,
-            [bytes([DartTrans.CD4, 0x04]) + value_bcd]
+            0x50 + pump_id, [bytes([DartTrans.CD4, 0x04]) + value_bcd]
         )
+
 
 driver = DartDriver()  # singleton
