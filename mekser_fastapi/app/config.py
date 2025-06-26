@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Final
 
 # -------- Serial port ----------
-SERIAL_PORT: Final[str] = "/tmp/ttyV0"    
+SERIAL_PORT: Final[str] = "/tmp/ttyS5"    
 BAUDRATE:   Final[int] = 9600
 BYTESIZE:   Final[int] = 8
 PARITY:     Final[str] = "N"
