@@ -1,6 +1,11 @@
+from asyncio import sleep
+from typing import List
+from app.enums import DartTrans
 from fastapi import APIRouter, Path, HTTPException
 from .core import PumpService
 from .schemas import PumpStatusOut, PresetIn
+
+from driver import driver
 
 import logging
 
@@ -9,6 +14,18 @@ router = APIRouter(prefix="/pump", tags=["Pump operations"])
 
 logger = logging.getLogger("mekser.api")
 
+@router.post("/{pump_id}/price")
+def update_price(pump_id: int, prices: List[float]):
+    blocks = []
+    for p in prices:
+        sleep(1)
+        amount = int(p * 100)
+        s = f"{amount:06d}"
+        bcd = bytes(int(s[i:i+2]) for i in (0, 2, 4))
+        blocks.append(bcd)
+    data = bytes([DartTrans.CD5, len(blocks)*3]) + b"".join(blocks)
+    driver.transact(addr= 0x50 + pump_id, trans_blocks=[data] )
+    return {"message": "price upd sent"}
 
 def _not_found_if_empty(data: dict):
     if not data:
