@@ -120,7 +120,7 @@ class PriceItem(BaseModel):
     price:  PositiveFloat
 
 class PricesIn(BaseModel):
-    prices: conlist(PriceItem, min_items=1)
+    prices: conlist(PriceItem, min_length=1)
 
 # ────────────────────────────────────────────────────────────────────────────
 #  FastAPI-роутер
