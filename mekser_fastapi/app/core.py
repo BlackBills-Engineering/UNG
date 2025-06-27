@@ -30,7 +30,7 @@ class PumpService:
         """
         Разбирает ответ насоса (DC-кадр) и возвращает словарь «status / volume / …».
         Если пришёл только ACK/NAK (1–2 байта) — отдаёт {}.
-        """
+        """    
         # короткий ACK / NAK → пропускаем
         if len(frame) < 6:          # ADR CTRL SEQ LNG CRC_L CRC_H  → 6 байт минимум
             return {}
@@ -56,6 +56,8 @@ class PumpService:
             # добавляйте другие DC* по необходимости
 
             i += 2 + length
+            
+        print(f"{'=' * 10} PARSE FRAME BEGIN {'=' * 10}\n{frame}\n{parsed}\n{'=' * 10} PARSE FRAME END {'=' * 10}\n")
 
         return parsed
 

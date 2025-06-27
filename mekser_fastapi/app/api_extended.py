@@ -92,7 +92,7 @@ class _PumpServiceExt(PumpService):
         last_nozzle_out = False
         try:
             while True:
-                frame = driver.cd1(pump_id, DccCmd.RETURN_FILL_INFO)
+                frame = driver.cd1(pump_id, DccCmd.RETURN_FILL_INFO)        
                 data = cls._parse_dc_frame(frame) or {}
                 payload: dict[str, object] = {}
 

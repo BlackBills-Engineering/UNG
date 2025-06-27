@@ -100,7 +100,7 @@ class DartDriver:
         """
         addr  – байт адреса 0x50…0x6F
         blocks – список готовых транзакций L3 (каждая с [TRANS][LNG]…)
-        """
+        """        
         body = b"".join(blocks)
         lng = len(body)
         ctrl = 0xF0                      # 1111 0000 – Host, DATA
@@ -115,6 +115,9 @@ class DartDriver:
             + bytes([crc & 0xFF, crc >> 8])              # CRC-L, CRC-H
             + bytes([self.ETX, self.SF])                 # ETX, SF (0xFA)
         )
+        
+        print(f"{'=' * 10} BUILD FRAME BEGIN {'=' * 10}\n{frame}\n{'=' * 10} BUILD FRAME END {'=' * 10}\n")
+        
         return frame
 
     # ────────── helpers для частых команд (CD1/3/4) ──────────
