@@ -99,3 +99,8 @@ class PumpService:
     def reset(cls, pump_id: int):
         frame = driver.cd1(pump_id, DccCmd.RESET)
         return cls._parse_dc_frame(frame)
+    
+    @classmethod
+    def switch_off(cls, pump_id: int):
+        frame = driver.cd1(pump_id, DccCmd.SWITCH_OFF)
+        return cls._parse_dc_frame(frame)

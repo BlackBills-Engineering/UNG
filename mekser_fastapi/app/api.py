@@ -77,3 +77,10 @@ def reset(pump_id: int = Path(..., ge=1)):
     data = PumpService.reset(pump_id)
     logger.info(f"POST reset response: {data}")
     return _not_found_if_empty(data)
+
+@router.post("/switch-off")
+def reset(pump_id: int = Path(..., ge=1)):
+    logger.info(f"HTTP POST /switch-off called")
+    data = PumpService.switch_off(pump_id)
+    logger.info(f"POST reset response: {data}")
+    return _not_found_if_empty(data)
