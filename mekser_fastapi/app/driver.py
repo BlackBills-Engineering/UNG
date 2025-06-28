@@ -108,7 +108,19 @@ class DartDriver:
         self._seq = 0x80 if self._seq == 0x00 else 0x00  # toggle 0x00/0x80
 
         hdr = bytes([addr, ctrl, seq, lng]) + body
-        crc = calc_crc(hdr)                              # CRC по ADR…Data
+        crc = calc_crc(hdr)     # CRC по ADR…Data
+
+        # ============= CRC VALIDATION START ============== #
+        crc_bytes = bytes([crc & 0xFF, crc >> 8])
+        full_data_with_crc = hdr + crc_bytes
+        validation_crc = calc_crc(full_data_with_crc)
+        print(f"CRC validation: {validation_crc:04X} (should be 0000)")
+        if validation_crc != 0x0000:
+            print("⚠️  CRC implementation may be incorrect!")
+        else:
+            print("✅ CRC implementation is correct")
+        # ============= CRC VALIDATION END ============== #
+        
         frame = (
             bytes([self.STX])
             + hdr
