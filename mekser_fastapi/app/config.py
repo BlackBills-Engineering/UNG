@@ -10,7 +10,7 @@ from typing import Final
 SERIAL_PORT: Final[str] = "/dev/ttyS0"
 BAUDRATE:   Final[int] = 9600
 BYTESIZE:   Final[int] = 8
-PARITY:     Final[str] = "N"
+PARITY:     Final[str] = "O"
 STOPBITS:   Final[int] = 1
 TIMEOUT:    Final[float] = 0.5             # чтение 500 мс
 
