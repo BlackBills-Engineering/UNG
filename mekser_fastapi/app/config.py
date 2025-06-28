@@ -19,8 +19,8 @@ TIMEOUT:    Final[float] = 0.5             # чтение 500 мс
 DEFAULT_PUMP_IDS = [1]
 
 # -------- Логика ----------------
+CRC_INIT = 0x0000
 CRC_POLY = 0x1021
-CRC_INIT = 0xFFFF
 
 
 logger = logging.getLogger("mekser.config")
