@@ -40,16 +40,19 @@ def get_status(pump_id: int = Path(..., ge=1, description="Номер колон
     return _not_found_if_empty(data)
 
 @router.get("/scan")
-def scan_pumps(max_id: int = 4):
+async def scan_pumps(max_id: int = 4):
     found = []
-    for pump_id in range(1, max_id+1):
+    for pump_id in range(1, max_id + 1):
+        await sleep(1)
         try:
             resp = PumpService.return_status(pump_id)
-            if resp.get("status"):
-                found.append({"pump_id": pump_id, **resp})
-        except:
-            pass
+            if resp:
+                logger.info("PUMP RESP ", resp)
+                found.append({"pump_id": {pump_id, resp}})
+        except Exception:
+            continue
     return {"found": found}
+
 
 @router.post("/{pump_id}/authorize", response_model=PumpStatusOut)
 def authorize(
