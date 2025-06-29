@@ -100,7 +100,7 @@ class DartDriver:
         """
         addr  – байт адреса 0x50…0x6F
         blocks – список готовых транзакций L3 (каждая с [TRANS][LNG]…)
-        """
+        """        
         body = b"".join(blocks)
         lng = len(body)
         ctrl = 0xF0                      # 1111 0000 – Host, DATA
@@ -108,13 +108,28 @@ class DartDriver:
         self._seq = 0x80 if self._seq == 0x00 else 0x00  # toggle 0x00/0x80
 
         hdr = bytes([addr, ctrl, seq, lng]) + body
-        crc = calc_crc(hdr)                              # CRC по ADR…Data
+        crc = calc_crc(hdr)     # CRC по ADR…Data
+
+        # ============= CRC VALIDATION START ============== #
+        crc_bytes = bytes([crc & 0xFF, crc >> 8])
+        full_data_with_crc = hdr + crc_bytes
+        validation_crc = calc_crc(full_data_with_crc)
+        print(f"CRC validation: {validation_crc:04X} (should be 0000)")
+        if validation_crc != 0x0000:
+            print("⚠️  CRC implementation may be incorrect!")
+        else:
+            print("✅ CRC implementation is correct")
+        # ============= CRC VALIDATION END ============== #
+        
         frame = (
             bytes([self.STX])
             + hdr
             + bytes([crc & 0xFF, crc >> 8])              # CRC-L, CRC-H
             + bytes([self.ETX, self.SF])                 # ETX, SF (0xFA)
         )
+        
+        print(f"{'=' * 10} BUILD FRAME BEGIN {'=' * 10}\n{frame}\n{'=' * 10} BUILD FRAME END {'=' * 10}\n")
+        
         return frame
 
     # ────────── helpers для частых команд (CD1/3/4) ──────────

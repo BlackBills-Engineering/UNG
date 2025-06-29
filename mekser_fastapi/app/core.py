@@ -97,7 +97,6 @@ class PumpService:
         logger.warning("_parse_dc_frame: DC1 not found in buffer")
         return {}
 
-
     # ———— публичные методы ———— #
     @classmethod
     def return_status(cls, pump_id: int):
@@ -143,6 +142,10 @@ class PumpService:
         frame = driver.cd1(pump_id, DccCmd.RESET)
         return cls._parse_dc_frame(frame)
     
+    @classmethod
+    def switch_off(cls, pump_id: int):
+        frame = driver.cd1(pump_id, DccCmd.SWITCH_OFF)
+        return cls._parse_dc_frame(frame)
 
 STX = 0x02
 ETX = 0x03
