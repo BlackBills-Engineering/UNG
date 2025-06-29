@@ -69,6 +69,8 @@ class PumpService:
         logger.debug(f"Raw frame received: {frame.hex()}")
         parsed = cls._parse_dc_frame(frame)
         logger.info(f"Parsed status: {parsed}")
+        
+        print("=" * 10, " PRINT FRAME START ", "=\n" * 10)
         return parsed
 
     @classmethod
