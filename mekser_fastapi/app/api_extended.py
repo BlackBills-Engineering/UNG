@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, PositiveFloat, conlist
 from .core import PumpService                  # бизнес-логика CD↔DC
 from .driver import driver                     # формирует кадры, I/O
 from .enums import DccCmd                      # константы CD1
-from .config import DEFAULT_PUMP_IDS           # колонки «из коробки»
+from .config import DEFAULT_PUMP_IDS, TIMEOUT           # колонки «из коробки»
 
 # ────────────────────────────────────────────────────────────────────────────
 #  Вспомогалки
@@ -65,7 +65,7 @@ class _PumpServiceExt(PumpService):
 
         import time
         for _ in range(3):                                # макс 3 попытки
-            time.sleep(0.4)
+            time.sleep(TIMEOUT)
             status = cls.return_status(pump_id)
             if status:                                    # DC1 получили
                 return status
@@ -87,7 +87,7 @@ class _PumpServiceExt(PumpService):
 
     # --- WebSocket-стрим DC2/DC3 -------------------------------------------
     @classmethod
-    async def stream_filling(cls, pump_id: int, ws: WebSocket, interval: float = 0.4):
+    async def stream_filling(cls, pump_id: int, ws: WebSocket, interval: float = TIMEOUT):
         await ws.accept()
         last_nozzle_out = False
         try:

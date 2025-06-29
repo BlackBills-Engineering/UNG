@@ -5,6 +5,8 @@ core.py – слой бизнес-операций. Сюда не “проса�
 
 import threading, time, logging
 from typing import Dict, Any
+
+from app.config import TIMEOUT
 from .driver import calc_crc, driver
 from .enums import PumpStatus, DccCmd, DecimalConfig, DartTrans
 
@@ -125,11 +127,11 @@ class PumpService:
         if volume is not None:
             v_int = int(volume * 10**DecimalConfig.VOLUME.value)
             driver.cd3_preset_volume(pump_id, int_to_bcd(v_int))
-            time.sleep(0.05)
+            time.sleep(TIMEOUT)
         if amount is not None:
             a_int = int(amount * 10**DecimalConfig.AMOUNT.value)
             driver.cd4_preset_amount(pump_id, int_to_bcd(a_int))
-            time.sleep(0.05)
+            time.sleep(TIMEOUT)
         # (2) AUTHORIZE
         frame = driver.cd1(pump_id, DccCmd.AUTHORIZE)
         logger.debug(f"Raw frame after AUTHORIZE: {frame.hex()}")

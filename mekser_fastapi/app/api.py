@@ -1,5 +1,6 @@
 from asyncio import sleep
 from typing import List
+from app.config import DEFAULT_PUMP_IDS, TIMEOUT
 from app.enums import DartTrans
 from fastapi import APIRouter, Path, HTTPException
 from .core import PumpService
@@ -18,7 +19,7 @@ logger = logging.getLogger("mekser.api")
 def update_price(pump_id: int, prices: List[float]):
     blocks = []
     for p in prices:
-        sleep(1)
+        sleep(TIMEOUT)
         amount = int(p * 100)
         s = f"{amount:06d}"
         bcd = bytes(int(s[i:i+2]) for i in (0, 2, 4))
@@ -40,12 +41,12 @@ def get_status(pump_id: int = Path(..., ge=1, description="Номер колон
     return _not_found_if_empty(data)
 
 @router.get("/scan")
-async def scan_pumps(max_id: int = 4):
+async def scan_pumps():
     found = []
     
     
-    for pump_id in range(1, max_id + 1):
-        await sleep(1)
+    for pump_id in range(1, DEFAULT_PUMP_IDS):
+        await sleep(TIMEOUT)
         try:
             resp = PumpService.return_status(pump_id)
             if resp:

@@ -140,7 +140,7 @@ def get_pump_status():
                     if info["data"]:
                         status = info["data"][0]
                         logging.info("Pump status=%d", status)
-        time.sleep(0.1)
+        time.sleep(TIMEOUT)
 
     ser.close()
     return status
