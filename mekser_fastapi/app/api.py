@@ -45,7 +45,7 @@ async def scan_pumps():
     found = []
     
     
-    for pump_id in range(1, DEFAULT_PUMP_IDS):
+    for pump_id in DEFAULT_PUMP_IDS:
         await sleep(TIMEOUT)
         try:
             resp = PumpService.return_status(pump_id)

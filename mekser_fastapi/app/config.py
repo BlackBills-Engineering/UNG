@@ -17,7 +17,7 @@ TIMEOUT:    Final[float] = 0.5             # чтение 500 мс
 
 # -------- Pump addresses --------
 # Адрес = 0x50 + pump_id (1-based).
-DEFAULT_PUMP_IDS = list(range(0, 62))
+DEFAULT_PUMP_IDS = list(range(0, 5))
 
 # -------- Логика ----------------
 CRC_INIT = 0x0000
