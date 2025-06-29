@@ -175,6 +175,24 @@ class DartDriver:
         return self.transact(
             0x50 + pump_id, [bytes([DartTrans.CD4, 0x04]) + value_bcd]
         )
-
+    
+    def test_cmd(self) -> bytes:
+        test_frame = bytes([
+            0x51, 0xF0, 0x00, 0x03, 0x01, 0x01, 0x00, 0x59, 0xAD, 0x03, 0xFA, 
+        ])
+    
+        print(f"Sending test frame: {' '.join(f'{b:02X}' for b in test_frame)}")
+    
+        with self._lock:
+            self._ser.write(test_frame)
+            self._ser.flush()
+            
+            # Ждем ответ
+            time.sleep(0.1)
+            res = self._ser.read(64)
+            
+            print(f"Received response: {' '.join(f'{b:02X}' for b in res)}")
+            return res
+        
 
 driver = DartDriver()  # singleton
