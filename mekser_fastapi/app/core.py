@@ -5,7 +5,6 @@ core.py – слой бизнес-операций. Сюда не “проса�
 
 import threading, time, logging
 from typing import Dict, Any
-
 from .driver import calc_crc, driver
 from .enums import PumpStatus, DccCmd, DecimalConfig, DartTrans
 
@@ -100,9 +99,15 @@ class PumpService:
     # ———— публичные методы ———— #
     @classmethod
     def return_status(cls, pump_id: int):
+        print(f"{"=" * 10} RETURN STATUS START {"=" * 10}")
+        
         logger.info(f"return_status: pump_id={pump_id}")
         frame = driver.cd1(pump_id, DccCmd.RETURN_STATUS)
         logger.debug(f"Raw frame received: {frame.hex()}")
+        
+        print("frame received: ", frame)
+        
+        print(f"{"=" * 10} RETURN STATUS END {"=" * 10}")  
 
         parser = DC1Parser()
         parser.feed(frame)

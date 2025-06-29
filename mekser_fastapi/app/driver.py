@@ -135,6 +135,8 @@ class DartDriver:
     # ────────── helpers для частых команд (CD1/3/4) ──────────
     def cd1(self, pump_id: int, dcc: int) -> bytes:
         """CD1 = [0x01, 0x01, DCC]"""
+        print("frame sent: ",0x50 + pump_id, [bytes([DartTrans.CD1, 0x01, dcc])])
+        
         return self.transact(0x50 + pump_id, [bytes([DartTrans.CD1, 0x01, dcc])])
 
     def cd3_preset_volume(self, pump_id: int, value_bcd: bytes) -> bytes:

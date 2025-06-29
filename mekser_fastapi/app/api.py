@@ -42,6 +42,8 @@ def get_status(pump_id: int = Path(..., ge=1, description="Номер колон
 @router.get("/scan")
 async def scan_pumps(max_id: int = 4):
     found = []
+    
+    
     for pump_id in range(1, max_id + 1):
         await sleep(1)
         try:
