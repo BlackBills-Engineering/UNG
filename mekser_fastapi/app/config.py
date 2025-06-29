@@ -19,6 +19,10 @@ TIMEOUT:    Final[float] = 0.5             # чтение 500 мс
 # Адрес = 0x50 + pump_id (1-based).
 DEFAULT_PUMP_IDS = list(range(1, 5))
 
+# -------- WebSocket --------
+WS_POLL_INTERVAL: Final[float] = TIMEOUT  # интервал опроса статусов для WebSocket
+
+
 # -------- Логика ----------------
 CRC_INIT = 0x0000
 CRC_POLY = 0x1021

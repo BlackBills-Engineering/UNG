@@ -30,6 +30,49 @@ def int_to_bcd(n: int, width: int = 4) -> bytes:
 # ———— PumpService ———— #
 class PumpService:
 
+    def _parse_frame(cls, frame: bytes) -> dict:
+        """
+        Парсит любой принятый буфер и извлекает транзакции DC1, DC2, DC3, DC5.
+        """
+        try:
+            stx = frame.index(driver.STX)
+            etx = frame.index(driver.ETX, stx+1)
+        except ValueError:
+            logger.warning("No full frame in buffer")
+            return {}
+        raw = frame[stx+1:etx]  # ADR,CTRL,SEQ,LNG,TRANS,LEN,data...,CRC-L,CRC-H
+        if len(raw) < 5:
+            return {}
+        lng = raw[3]
+        pos = 4
+        parsed = {}
+        idx = 0
+        while idx < lng:
+            trans = raw[pos]
+            dlen = raw[pos+1]
+            data = raw[pos+2:pos+2+dlen]
+            pos += 2 + dlen
+            idx += 2 + dlen
+
+            if trans == DartTrans.DC1 and dlen >= 1:
+                code = data[0]
+                parsed["status"] = PumpStatus(code).name
+            elif trans == DartTrans.DC2 and dlen == 8:
+                vol = bcd_to_int(data[0:4]) / (10**DecimalConfig.VOLUME.value)
+                amo = bcd_to_int(data[4:8]) / (10**DecimalConfig.AMOUNT.value)
+                parsed["volume"] = vol
+                parsed["amount"] = amo
+            elif trans == DartTrans.DC3 and dlen == 4:
+                price = bcd_to_int(data[0:3]) / (10**DecimalConfig.UNIT_PRICE.value)
+                nozio = data[3]
+                parsed["price"] = price
+                parsed["nozzle"] = nozio & 0x0F
+                parsed["nozzle_out"] = bool(nozio & 0x10)
+            elif trans == DartTrans.DC5 and dlen >= 1:
+                parsed["alarm"] = data[0]
+
+        return parsed
+
     @staticmethod
     def _parse_dc1(frame: bytes) -> dict:
         """
@@ -149,26 +192,17 @@ class PumpService:
     # ———— публичные методы ———— #
     @classmethod
     def return_status(cls, pump_id: int):
-        print(f"{"=" * 10} RETURN STATUS START {"=" * 10}")
-        
         logger.info(f"return_status: pump_id={pump_id}")
         frame = driver.cd1(pump_id, DccCmd.RETURN_STATUS)
         logger.debug(f"Raw frame received: {frame.hex()}")
-        
-        print("frame received: ", frame)
-        
-        print(f"{"=" * 10} RETURN STATUS END {"=" * 10}")  
 
-        return cls._parse_dc1(frame)
+        if not frame:
+            logger.error("Empty frame on status")
+            return {}
+        parsed = cls._parse_frame(frame)
+        logger.info(f"Parsed status: {parsed}")
+        return parsed
 
-        # parser = DC1Parser()
-        # parser.feed(frame)
-        # status = parser.extract()
-
-        # if status is None:
-        #     logger.error("return_status: не удалось распарсить DC1")
-        #     return {}
-        # return status
 
     @classmethod
     def authorize(cls, pump_id: int, volume: float | None = None, amount: float | None = None)-> dict:
@@ -185,7 +219,6 @@ class PumpService:
         # (2) AUTHORIZE
         frame = driver.cd1(pump_id, DccCmd.AUTHORIZE)
         logger.debug(f"Raw frame after AUTHORIZE: {frame.hex()}")
-        # parsed = cls._parse_dc_frame(frame)
         parsed = cls._parse_dc1(frame)
         logger.info(f"Parsed authorize response: {parsed}")
         return parsed

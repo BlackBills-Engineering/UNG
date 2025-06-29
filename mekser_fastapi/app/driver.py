@@ -37,8 +37,11 @@ def calc_crc(data: bytes) -> int:
     for byte in data:
         crc ^= byte << 8
         for _ in range(8):
-            crc = ((crc << 1) ^ CRC_POLY) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
-    return crc & 0xFFFF
+            if crc & 0x8000:
+                crc = ((crc << 1) ^ CRC_POLY) & 0xFFFF
+            else:
+                crc = (crc << 1) & 0xFFFF
+    return crc
 
 
 # ───────────────────────────────── Driver ──────────────────────────────────
@@ -66,56 +69,79 @@ class DartDriver:
             f"Opening serial port {SERIAL_PORT} @ {BAUDRATE} bps"
         )
 
-    # ────────── публичный API ──────────
-    def transact(self, addr: int, trans_blocks: List[bytes], timeout: float = 1.0) -> bytes:
+        # ────────── публичный API ──────────
+    def transact(self, addr: int, trans_blocks: List[bytes], timeout: float = None) -> bytes:
         """
-        Отправить один кадр (STX … ETX SF) с произвольным списком транзакций
-        и дождаться ответа того же адреса. Возвращает «сырые» байты кадра.
+        Собирает и отправляет один кадр STX…ETX SF с любым числом L3-транзакций
+        и ждёт ответ того же адреса. В случае CRC-0 ошибки повторяет до 3 раз.
         """
-        log = logging.getLogger("mekser.driver.transact")
-        log.debug(
-            f"transact(addr=0x{addr:02X}, blocks={len(trans_blocks)}, timeout={timeout})"
-        )
-        frame = self._build_frame(addr, trans_blocks)
-        log.debug(f"TX frame: {frame.hex()}")
+        if timeout is None:
+            timeout = TIMEOUT
 
+        # Собираем кадр
+        body = b"".join(trans_blocks)
+        lng = len(body)
+        ctrl = 0xF0                      # 1111 0000 – Host, DATA
+        seq = self._seq
+        self._seq = 0x80 if self._seq == 0x00 else 0x00
+
+        hdr = bytes([addr, ctrl, seq, lng]) + body
+        crc = calc_crc(hdr)
+        crc_bytes = bytes([crc & 0xFF, (crc >> 8) & 0xFF])  # CRC-L, CRC-H
+
+        frame = bytes([self.STX]) + hdr + crc_bytes + bytes([self.ETX, self.SF])
+        _log.debug(f"TX frame: {frame.hex()}")
+
+        attempts = 0
         with self._lock:
-            self._ser.reset_input_buffer()
-            self._ser.write(frame)
-            self._ser.flush()
+            while attempts < 3:
+                self._ser.reset_input_buffer()
+                self._ser.write(frame)
+                self._ser.flush()
 
-            start = time.time()
-            buf = bytearray()
-            while time.time() - start < timeout:
-                chunk = self._ser.read(self._ser.in_waiting or 1)
-                if chunk:
-                    buf += chunk
-                    if self.ETX in chunk:          # увидели ETX – почти конец
-                        # дочитываем SF (1 байт) если ещё нет
-                        # if len(buf) < 2 or buf[-1] != self.SF:
-                        #     buf += self._ser.read(1)
-                        if buf[-1] != self.SF:
-                            buf += self._ser.read(1)
-                        break
-            log.debug(f"RX frame: {buf.hex()}")
+                start = time.time()
+                buf = bytearray()
+                # Читаем пока не встретим ETX или не выйдет таймаут
+                while time.time() - start < timeout:
+                    chunk = self._ser.read(self._ser.in_waiting or 1)
+                    if chunk:
+                        buf += chunk
+                        if self.ETX in chunk:
+                            # дочитываем SF, если надо
+                            if buf[-1] != self.SF:
+                                buf += self._ser.read(1)
+                            break
 
-            # === CRC–0 validation (ADR…CRC-H должно дать 0x0000) ===
-            try:
-                # найдём STX/ETX чтобы обрезать preamble/epilogue
-                stx = buf.index(self.STX)
-                etx = buf.index(self.ETX, stx + 1)
-                # регион от ADR (stx+1) до CRC-H (etx-2)
-                crc_region = buf[stx+1 : etx-1]     # ADR…CRC-H включительно
-                crc_check = calc_crc(crc_region)
-                if crc_check != 0:
-                    log.error(f"CRC-0 validation FAILED: got={crc_check:04X}, frame={buf.hex()}")
-                    raise IOError("Bad CRC") #или вернуть пустой buf
-                else:
-                    log.debug("CRC-0 validation passed")
-            except ValueError:
-                log.error("Malformed frame: cannot find STX/ETX for CRC check")
+                if not buf:
+                    _log.error(f"No response received (attempt {attempts+1}/3)")
+                    attempts += 1
+                    time.sleep(0.1)
+                    continue
 
-            return bytes(buf)
+                # Фаза CRC-0 верификации: регион от ADR до CRC-H включительно
+                try:
+                    stx = buf.index(self.STX)
+                    etx = buf.index(self.ETX, stx + 1)
+                    # берем байты [ADR…CRC-H]
+                    crc_region = buf[stx+1 : etx-1]  # ADR…CRC-H
+                    crc0 = calc_crc(crc_region)
+                    if crc0 != 0:
+                        _log.error(f"CRC-0 validation FAILED: calc={crc0:04X}, frame={buf.hex()}")
+                        attempts += 1
+                        time.sleep(0.1)
+                        continue
+                except ValueError:
+                    _log.error(f"Malformed frame (no STX/ETX) on attempt {attempts+1}")
+                    attempts += 1
+                    time.sleep(0.1)
+                    continue
+
+                _log.debug(f"RX frame: {buf.hex()}")
+                return bytes(buf)
+
+        _log.error("Failed to receive valid frame after 3 retries")
+        return b""
+
 
     # ────────── приватка ──────────
     def _build_frame(self, addr: int, blocks: List[bytes]) -> bytes:
