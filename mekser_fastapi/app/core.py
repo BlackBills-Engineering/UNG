@@ -25,41 +25,7 @@ def int_to_bcd(n: int, width: int = 4) -> bytes:
 # ———— PumpService ———— #
 class PumpService:
 
-    # @staticmethod
-    # def _parse_dc_frame(frame: bytes) -> dict:
-    #     """
-    #     Разбирает ответ насоса (DC-кадр) и возвращает словарь «status / volume / …».
-    #     Если пришёл только ACK/NAK (1–2 байта) — отдаёт {}.
-    #     """
-    #     # короткий ACK / NAK → пропускаем
-    #     if len(frame) < 6:          # ADR CTRL SEQ LNG CRC_L CRC_H  → 6 байт минимум
-    #         return {}
-
-    #     # --- дальше идёт «старый» парсер ---
-    #     i = 4                       # позиция первого TRANS
-    #     body = frame[4:-3]          # ADR CTRL SEQ LNG [body] CRC_L CRC_H ETX SF
-    #     parsed: dict[str, object] = {}
-
-    #     while i < len(body):
-    #         trans = body[i]
-    #         length = body[i + 1]
-    #         payload = body[i + 2 : i + 2 + length]
-
-    #         if trans == 0x01:       # DC1 – STATUS
-    #             parsed["status"] = payload[1] & 0x0F
-    #         elif trans == 0x02:     # DC2 – Volume/Amount
-    #             vol  = int(payload[0:4].hex(), 16) / 100  # BCD → float
-    #             amo  = int(payload[4:8].hex(), 16) / 100
-    #             parsed.update(volume=vol, amount=amo)
-    #         elif trans == 0x03:     # DC3 – Nozzle info
-    #             parsed.update(nozzle=payload[0], nozzle_out=bool(payload[1] & 0x10))
-    #         # добавляйте другие DC* по необходимости
-
-    #         i += 2 + length
-
-    #     return parsed
-
-
+   
 
     @staticmethod
     def _parse_dc_frame(frame: bytes) -> dict:
