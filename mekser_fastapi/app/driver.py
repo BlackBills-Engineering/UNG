@@ -31,6 +31,8 @@ _log = logging.getLogger("mekser.driver")
 
 # ───────────────────────────────── CRC-16 CCITT ────────────────────────────
 def calc_crc(data: bytes) -> int:
+    """CRC-16 CCITT (poly=0x1021, init=0x0000)"""
+
     crc = CRC_INIT
     for byte in data:
         crc ^= byte << 8
@@ -78,6 +80,7 @@ class DartDriver:
         log.debug(f"TX frame: {frame.hex()}")
 
         with self._lock:
+            self._ser.reset_input_buffer()
             self._ser.write(frame)
             self._ser.flush()
 
@@ -89,10 +92,29 @@ class DartDriver:
                     buf += chunk
                     if self.ETX in chunk:          # увидели ETX – почти конец
                         # дочитываем SF (1 байт) если ещё нет
-                        if len(buf) < 2 or buf[-1] != self.SF:
+                        # if len(buf) < 2 or buf[-1] != self.SF:
+                        #     buf += self._ser.read(1)
+                        if buf[-1] != self.SF:
                             buf += self._ser.read(1)
                         break
             log.debug(f"RX frame: {buf.hex()}")
+
+            # === CRC–0 validation (ADR…CRC-H должно дать 0x0000) ===
+            try:
+                # найдём STX/ETX чтобы обрезать preamble/epilogue
+                stx = buf.index(self.STX)
+                etx = buf.index(self.ETX, stx + 1)
+                # регион от ADR (stx+1) до CRC-H (etx-2)
+                crc_region = buf[stx+1 : etx-1]     # ADR…CRC-H включительно
+                crc_check = calc_crc(crc_region)
+                if crc_check != 0:
+                    log.error(f"CRC-0 validation FAILED: got={crc_check:04X}, frame={buf.hex()}")
+                    raise IOError("Bad CRC") #или вернуть пустой buf
+                else:
+                    log.debug("CRC-0 validation passed")
+            except ValueError:
+                log.error("Malformed frame: cannot find STX/ETX for CRC check")
+
             return bytes(buf)
 
     # ────────── приватка ──────────
@@ -111,7 +133,11 @@ class DartDriver:
         crc = calc_crc(hdr)     # CRC по ADR…Data
 
         # ============= CRC VALIDATION START ============== #
-        crc_bytes = bytes([crc & 0xFF, crc >> 8])
+        crc_bytes = bytes([crc & 0xFF, (crc >> 8) & 0xFF])
+        frame = bytes([self.STX]) + hdr + crc_bytes + bytes([self.ETX, self.SF])
+        _log.debug(f"Built frame: {frame.hex()}")
+
+
         full_data_with_crc = hdr + crc_bytes
         validation_crc = calc_crc(full_data_with_crc)
         print(f"CRC validation: {validation_crc:04X} (should be 0000)")
@@ -124,7 +150,7 @@ class DartDriver:
         frame = (
             bytes([self.STX])
             + hdr
-            + bytes([crc & 0xFF, crc >> 8])              # CRC-L, CRC-H
+            + crc_bytes              # CRC-L, CRC-H
             + bytes([self.ETX, self.SF])                 # ETX, SF (0xFA)
         )
         
@@ -132,6 +158,7 @@ class DartDriver:
         
         return frame
 
+    # ────────── Утилиты для L3 ──────────
     # ────────── helpers для частых команд (CD1/3/4) ──────────
     def cd1(self, pump_id: int, dcc: int) -> bytes:
         """CD1 = [0x01, 0x01, DCC]"""
