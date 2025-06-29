@@ -5,12 +5,13 @@
 import logging
 from pathlib import Path
 from typing import Final
+import serial
 
 # -------- Serial port ----------
 SERIAL_PORT: Final[str] = "COM3"
 BAUDRATE:   Final[int] = 9600
 BYTESIZE:   Final[int] = 8
-PARITY:     Final[str] = "O"
+PARITY:     Final[str] = serial.PARITY_ODD
 STOPBITS:   Final[int] = 1
 TIMEOUT:    Final[float] = 0.5             # чтение 500 мс
 
