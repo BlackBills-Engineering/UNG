@@ -15,6 +15,11 @@ router = APIRouter(prefix="/pump-old", tags=["Pump operations"])
 
 logger = logging.getLogger("mekser.api")
 
+@router.get("/test-cmd")
+def test_cmd():
+    res = driver.test_cmd()
+    return res 
+
 @router.post("/{pump_id}/price")
 def update_price(pump_id: int, prices: List[float]):
     blocks = []
